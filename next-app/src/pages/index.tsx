@@ -1,70 +1,103 @@
-import Head from 'next/head'
-import Image from 'next/image'
-import styles from '../styles/Home.module.css'
+import Element = React.JSX.Element
+import {useEffect, useState} from 'react'
+import {
+    SetTitle,
+    ProjectsContainer,
+    ProjectsUseState,
+    ProjectsSetState,
+    setTitleCallback,
+    SetStates, OtherUseState
+} from '@/types/info'
+import {ContainerList} from '@/types/ContainerList'
+import ProjectsThead from '@/components/ProjectsThead'
+import ProjectsRows from '@/components/ProjectsRows'
+import OtherThead from '@/components/OtherThead'
+import OtherRows from '@/components/OtherRows'
 
-export default function Home() {
-  return (
-    <div className={styles.container}>
-      <Head>
-        <title>Create Next app</title>
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js</a> on Docker Compose!
-        </h1>
-
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.tsx</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.card}
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
-      </main>
-
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <span className={styles.logo}>
-            <Image src="/vercel.svg" alt="Vercel Logo" width={72} height={16} />
-          </span>
-        </a>
-      </footer>
-    </div>
-  )
+function getSetTitleCallback(projectsSetState: ProjectsSetState): setTitleCallback {
+    return (setTitle: SetTitle) => {
+        return async () => {
+            await updateTitle(setTitle, projectsSetState)
+        }
+    }
 }
+
+async function updateTitle(setTitle: SetTitle, projectsSetState: ProjectsSetState): Promise<void> {
+    let title = prompt('請輸入新的標題')
+    if (!title) {
+        alert('標題尚未更新.')
+        return
+    }
+    title = title.trim()
+    const {containerName} = setTitle
+    const method = 'POST'
+    const headers = {'Content-Type': 'application/json'}
+    const body = JSON.stringify({containerName, title})
+    const init = {method, headers, body}
+    const response = await fetch(WEB_DEV_URL_API_INFO, init)
+    if (!response.ok) {
+        alert('更新失敗.')
+        return
+    }
+    projectsSetState((previousList: ProjectsContainer[]) => {
+        return previousList.map((item) => {
+            if (item.containerName === containerName) {
+                return {...item, title: title}
+            }
+            return item
+        })
+    })
+    alert('更新成功.')
+}
+
+function settingSetStates(setStates: SetStates, result: object): void {
+    Object.entries(ContainerList).forEach(([key]) => {
+        const setStateFunctionName = `${key}SetState`
+        const setState = setStates[setStateFunctionName]
+        if (setState && typeof setState === 'function') {
+            setState(result[key])
+        }
+    })
+}
+
+function callInfoAPI(setStates: SetStates): void {
+    fetch(WEB_DEV_URL_API_INFO)
+        .then((result: Response) => result.json())
+        .then((result: object) => settingSetStates(setStates, result))
+}
+
+function index(): Element {
+    const [
+        projectsState,
+        ProjectsContainerListSetState
+    ] = useState<ProjectsUseState>([])
+    const [
+        otherState,
+        OtherContainerListSetState
+    ] = useState<OtherUseState>([])
+    useEffect(() => {
+        document.body.style.backgroundColor = '#00FF004C';
+        callInfoAPI({ProjectsContainerListSetState, OtherContainerListSetState})
+    }, [])
+    return <div className='container mt-5'>
+        <h1 className='fw-bolder text-white'>Web Frontend Dev Website</h1>
+        <h5 className='fw-bolder text-white mt-5'>專案站點列表</h5>
+        <table className='table table-striped table-bordered bg-white'>
+            <ProjectsThead/>
+            <ProjectsRows
+                state={projectsState}
+                setTitleCallback={getSetTitleCallback(ProjectsContainerListSetState)}
+                url={WEB_DEV_URL}/>
+        </table>
+        <h5 className='fw-bolder text-white mt-5'>其他容器列表</h5>
+        <table className='table table-striped table-bordered  bg-white'>
+            <OtherThead/>
+            <OtherRows otherState={otherState}/>
+        </table>
+    </div>
+}
+
+const WEB_DEV_URL = process.env.NEXT_PUBLIC_WEB_DEV_URL || 'http://localhost:3000'
+const WEB_DEV_URL_API_INFO = `${WEB_DEV_URL}/api/info`
+
+export default index
